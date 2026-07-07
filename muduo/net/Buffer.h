@@ -387,25 +387,26 @@ class Buffer : public muduo::copyable
   const char* begin() const
   { return &*buffer_.begin(); }
 
-  void makeSpace(size_t len)
-  {
-    if (writableBytes() + prependableBytes() < len + kCheapPrepend)
-    {
-      // FIXME: move readable data
-      buffer_.resize(writerIndex_+len);
-    }
-    else
-    {
-      // move readable data to the front, make space inside buffer
-      assert(kCheapPrepend < readerIndex_);
-      size_t readable = readableBytes();
-      std::copy(begin()+readerIndex_,
-                begin()+writerIndex_,
-                begin()+kCheapPrepend);
-      readerIndex_ = kCheapPrepend;
-      writerIndex_ = readerIndex_ + readable;
-      assert(readable == readableBytes());
-    }
+  void makeSpace(size_t len) {
+      if (writableBytes() + prependableBytes() < len) {
+          size_t newSize = readableBytes() + len + kCheapPrepend;
+          std::vector<char> newBuf(newSize);
+          // 复制现有数据到新缓冲区，保持前部预留空间
+          std::copy(begin() + readerIndex_, begin() + writerIndex_,
+                    newBuf.begin() + kCheapPrepend);
+          buffer_.swap(newBuf);
+          // 更新索引（数据现在位于 kCheapPrepend 之后）
+          size_t readable = readableBytes();
+          readerIndex_ = kCheapPrepend;
+          writerIndex_ = readerIndex_ + readable;
+      } else {
+          // 移动数据到前端（原代码保持不变）
+          size_t readable = readableBytes();
+          std::copy(begin() + readerIndex_, begin() + writerIndex_,
+                    begin() + kCheapPrepend);
+          readerIndex_ = kCheapPrepend;
+          writerIndex_ = readerIndex_ + readable;
+      }
   }
 
  private:
